@@ -1,0 +1,2185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星系模拟器 - 真实宇宙探索</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    canvas {
+      display: block;
+    }
+    
+    .control-panel {
+      backdrop-filter: blur(10px);
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .stats-panel {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 10px;
+      padding: 15px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(to bottom, #0f172a, #1e1b4b);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      transition: opacity 1s ease-out;
+    }
+    .loading-bar {
+      width: 300px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      margin-top: 20px;
+      overflow: hidden;
+    }
+    .loading-progress {
+      height: 100%;
+      background: linear-gradient(to right, #4f46e5, #a855f7);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+    .star-pulse {
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.7; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); opacity: 0.7; }
+    }
+    .galaxy-type-btn.active {
+      background: #4f46e5;
+      box-shadow: 0 0 10px rgba(79, 70, 229, 0.5);
+    }
+    .ui-hidden .control-panel,
+.ui-hidden .stats-panel,
+.ui-hidden #showOwnedPanel {
+    display: none;
+}
+
+#showUI {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    background: rgba(0,0,0,0.3);
+    color: rgba(255, 255, 255, 0.9);
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 1s ease;
+    font-size: 12px;
+}
+#showUI.visible {
+    opacity: 1;
+    transition: opacity 0.1s ease;
+}
+  </style>
+</head>
+<button id="showUI" style="display:none;">显示UI</button>
+<body class="bg-black text-white">
+  <!-- 加载屏幕 -->
+  <div id="loadingScreen" class="loading-screen" style="background: #000;">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold mb-4 flex items-center justify-center">
+        <span class="mr-3 star-pulse">🌌</span> 星系模拟器
+      </h1>
+      <p class="text-lg text-purple-200 mb-6">正在初始化宇宙环境...</p >
+      <div class="loading-bar">
+        <div id="loadingProgress" class="loading-progress"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="mainContent" class="hidden flex flex-col items-center justify-center h-screen overflow-hidden">
+    <div class="control-panel rounded-xl p-4 w-11/12 max-w-5x!">
+      <div class="flex flex-wrap items-center justify-between mb-4">
+        <h1 class="text-2xl font-bold flex items-center">
+          <span class="mr-2">🌌</span> 星系模拟器
+        </h1>
+        <div class="flex items-center space-x-4">
+          <span id="fpsCounter" class="text-sm bg-purple-900 px-2 py-1 rounded">FPS: 60</span>
+          <span id="galaxyCount" class="text-sm bg-blue-900 px-2 py-1 rounded">星系: 2</span>
+        </div>
+      </div>
+      <button id="hideUI" class="text-sm bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">隐藏UI</button>
+      <div class="flex flex-wrap items-center gap-4 mb-3">
+        <div class="flex space-x-2">
+          <button id="startBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-all flex items-center">
+            <span class="mr-2">▶️</span> 开始
+          </button>
+          <button id="pauseBtn" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-lg transition-all flex items-center">
+            <span class="mr-2">⏸️</span> 暂停
+          </button>
+          <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-all flex items-center">
+            <span class="mr-2">🔄</span> 重置
+          </button>
+        </div>
+        
+        <div class="flex items-center">
+          <label for="speedSlider" class="mr-2 text-sm">速度:</label>
+          <input type="range" id="speedSlider" min="0.1" max="2" step="0.1" value="1" 
+                 class="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+          <span id="speedValue" class="ml-2 text-sm w-10">1.0x</span>
+        </div>
+        
+        <div class="flex items-center">
+          <label for="densitySlider" class="mr-2 text-sm">密度:</label>
+          <input type="range" id="densitySlider" min="0.1" max="2" step="0.1" value="1" 
+                 class="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+          <span id="densityValue" class="ml-2 text-sm w-10">1.0x</span>
+        </div>
+      </div>
+      <div class="flex items-center">
+  <button id="musicToggle" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded-lg transition-all flex items-center mr-2">
+    <span class="mr-2">🎵</span> 音乐
+  </button>
+  <label for="volumeSlider" class="mr-2 text-sm">音量:</label>
+  <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.5" 
+         class="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+  <span id="volumeValue" class="ml-2 text-sm w-8">50%</span>
+</div>
+      
+      
+      
+      <div class="text-xs text-gray-300">
+        <strong>控制说明:</strong> 
+        左键拖动=旋转视角 | 
+        滚轮=缩放距离 | 
+        WASD=基于视角移动 | 
+        QE=基于视角升降 |
+        R=重置视角 |
+        ⬆️⬇️↔️= 旋转视角 
+      </div>
+    </div>
+    
+    <div id="container" class="w-full h-full rounded-lg overflow-hidden"></div>
+    <!-- 星系信息面板 -->
+<div id="galaxyInfoPanel" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 bg-opacity-95 p-6 rounded-lg shadow-2xl max-w-md w-full hidden z-50">
+  <div class="flex justify-between items-start mb-4">
+    <h3 class="text-xl font-bold text-white">星系信息</h3>
+    <button id="closeInfoPanel" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+  </div>
+  
+  <div class="space-y-4">
+    <div id="galaxyBasicInfo" class="text-sm text-gray-300">
+      <div>名称: <span id="galaxyName">-</span></div>
+      <div>类型: <span id="galaxyType">-</span></div>
+      <div>半径: <span id="galaxyRadius">-</span> 光年</div>
+      <div>距离: <span id="galaxyDistance">-</span> 光年</div>
+    </div>
+    
+    <div id="galaxyDescription" class="text-gray-200 text-sm leading-relaxed border-t border-gray-700 pt-3">
+      <p>点击星系查看详细信息...</p >
+    </div>
+    
+    <div id="ownershipInfo" class="border-t border-gray-700 pt-3 hidden">
+      <div class="text-green-400 text-sm mb-2">✅ 已拥有</div>
+      <div class="text-xs text-gray-400">所有者: <span id="ownerName">-</span></div>
+    </div>
+    
+    <div class="flex gap-2 pt-3">
+      <button id="purchaseGalaxy" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-2 px-4 rounded transition-all">
+        🪐 购买星系
+      </button>
+      <button id="deselectGalaxy" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors">
+        ✖ 取消选择
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 选择高亮效果 -->
+<div id="selectionIndicator" class="fixed pointer-events-none hidden z-40">
+  <div class="selection-ring"></div>
+</div>
+
+<!-- 购买成功提示 -->
+<div id="purchaseToast" class="fixed top-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg hidden z-50">
+  🎉 购买成功！这个星系现在属于您了！
+</div>
+
+<style>
+.selection-ring {
+  width: 100px;
+  height: 100px;
+  border: 3px solid #3b82f6;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+#galaxyInfoPanel {
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+</style>
+    <!-- 统计面板 -->
+    <div class="stats-panel hidden md:block">
+      <h3 class="text-sm font-bold mb-2 text-purple-300">宇宙统计</h3>
+      <div class="space-y-1 text-xs">
+        <div>可见星系: <span id="visibleGalaxies">2</span></div>
+        <div>渲染距离: <span id="renderDistance">3000</span> 单位</div>
+        <div>相机位置: <span id="cameraPos">X:0, Y:0, Z:0</span></div>
+        <div>相机方向: <span id="cameraDir">X:0, Y:0, Z:-1</span></div>
+      </div>
+    </div>
+  </div>
+<script>
+    // 宇宙参数 - 性能优化版
+    const universeParams = {
+      galaxyDensity: 0.000001,
+      renderDistance: 5000,
+      maxVisible: 3000,
+      minDistance: 300,
+      starCount: 1500,
+      dustCount: 600,
+      nebulaCount: 30,
+      haloCount: 600,
+      distanceAttenuation: 0.001,
+      densityMultiplier: 1.0,
+      galaxyType: 'spiral' // 默认星系类型
+    };
+
+    // 创建场景
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a1a);
+    scene.fog = new THREE.FogExp2(0x0a0a1a, 0.0005);
+    
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 10000);
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance"
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    // 光照系统
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0x00bfff, 0.7);
+    directionalLight.position.set(50, 50, 50);
+    scene.add(directionalLight);
+
+    // 添加一些背景恒星
+    function createBackgroundStars() {
+      const starGeometry = new THREE.BufferGeometry();
+      const starCount = 2000;
+      const starPositions = new Float32Array(starCount * 3);
+      const starColors = new Float32Array(starCount * 3);
+      const starSizes = new Float32Array(starCount);
+      
+      for (let i = 0; i < starCount; i++) {
+        const i3 = i * 3;
+        const radius = 2000 + Math.random() * 8000;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        
+        starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+        starPositions[i3+1] = radius * Math.sin(phi) * Math.sin(theta);
+        starPositions[i3+2] = radius * Math.cos(phi);
+        
+        const brightness = 0.2 + Math.random() * 0.5;
+        starColors[i3] = brightness;
+        starColors[i3+1] = brightness;
+        starColors[i3+2] = brightness;
+        
+        starSizes[i] = 0.1 + Math.random() * 0.5;
+      }
+      
+      starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+      starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+      starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+      
+      const starMaterial = new THREE.PointsMaterial({
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.7,
+        sizeAttenuation: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        size: 1.0
+      });
+      
+      const stars = new THREE.Points(starGeometry, starMaterial);
+      scene.add(stars);
+      return stars;
+    }
+
+    // 自由移动控制器
+    // 自由移动控制器
+// 自由移动控制器 - 四元数版本（完整代码）
+// 自由移动控制器 - 四元数版本（完整代码）
+const freeMoveController = {
+    keys: {
+        KeyW: false,
+        KeyA: false,
+        KeyS: false,
+        KeyD: false,
+        KeyQ: false,
+        KeyE: false,
+        KeyR: false,
+        ArrowUp: false,
+        ArrowDown: false,
+        ArrowLeft: false,
+        ArrowRight: false,
+        Digit1: false,
+        Digit2: false,
+        Digit3: false,
+        Digit4: false,
+        Digit5: false
+    },
+    baseMoveSpeed: 5.0,
+    currentMoveSpeed: 5.0,
+    rotationSpeed: 0.0075,
+    
+    // 使用四元数替代欧拉角
+    cameraQuaternion: new THREE.Quaternion(),
+    cameraDirection: new THREE.Vector3(0, 0, -1),
+
+    // 速度预设
+    speedPresets: {
+        1: 1,
+        2: 5,
+        3: 15,
+        4: 50,
+        5: 200
+    },
+
+    setSpeed(speed) {
+        this.currentMoveSpeed = speed;
+        this.updateSpeedDisplay();
+    },
+
+    updateSpeedDisplay() {
+        const speedElement = document.getElementById('cameraSpeedValue');
+        if (speedElement) {
+            speedElement.textContent = `${this.currentMoveSpeed.toFixed(0)}`;
+        }
+    },
+
+    init() {
+        document.addEventListener('keydown', (e) => {
+            if (this.keys.hasOwnProperty(e.code)) {
+                this.keys[e.code] = true;
+            }
+
+            if (e.code >= 'Digit1' && e.code <= 'Digit5') {
+                const speedLevel = parseInt(e.code.replace('Digit', ''));
+                const newSpeed = this.speedPresets[speedLevel];
+                this.setSpeed(newSpeed);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (this.keys.hasOwnProperty(e.code)) {
+                this.keys[e.code] = false;
+            }
+        });
+
+        renderer.domElement.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            camera.position.addScaledVector(this.cameraDirection, e.deltaY * 0.1);
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyR') {
+                this.resetCamera();
+            }
+        });
+
+        // 初始化四元数
+        this.cameraQuaternion.identity();
+        this.updateCameraDirection();
+    },
+
+    update() {
+        this.handleMovement();
+        this.handleRotation();
+        this.updateCameraInfo();
+    },
+
+    handleMovement() {
+        const moveDirection = new THREE.Vector3();
+
+        // 使用四元数计算正确的方向向量
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(this.cameraQuaternion);
+        
+        const right = new THREE.Vector3(1, 0, 0);
+        right.applyQuaternion(this.cameraQuaternion);
+
+        if (this.keys.KeyW) moveDirection.add(forward);
+        if (this.keys.KeyS) moveDirection.sub(forward);
+        if (this.keys.KeyA) moveDirection.sub(right);
+        if (this.keys.KeyD) moveDirection.add(right);
+        if (this.keys.KeyQ) moveDirection.y -= 1;
+        if (this.keys.KeyE) moveDirection.y += 1;
+
+        moveDirection.normalize();
+        camera.position.addScaledVector(moveDirection, this.currentMoveSpeed);
+    },
+
+    // 使用四元数处理旋转
+    handleRotation() {
+        let yawDelta = 0;
+        let pitchDelta = 0;
+
+        if (this.keys.ArrowLeft) yawDelta += this.rotationSpeed;
+        if (this.keys.ArrowRight) yawDelta -= this.rotationSpeed;
+        if (this.keys.ArrowUp) pitchDelta += this.rotationSpeed;
+        if (this.keys.ArrowDown) pitchDelta -= this.rotationSpeed;
+
+        if (yawDelta !== 0 || pitchDelta !== 0) {
+            // 使用四元数进行旋转
+            const yawQuaternion = new THREE.Quaternion();
+            const pitchQuaternion = new THREE.Quaternion();
+            
+            // 偏航（Y轴旋转）
+            yawQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawDelta);
+            
+            // 俯仰（X轴旋转）- 使用相机的局部X轴
+            const cameraRight = new THREE.Vector3(1, 0, 0);
+            cameraRight.applyQuaternion(this.cameraQuaternion);
+            pitchQuaternion.setFromAxisAngle(cameraRight, pitchDelta);
+            
+            // 组合旋转
+            this.cameraQuaternion.multiplyQuaternions(yawQuaternion, this.cameraQuaternion);
+            this.cameraQuaternion.multiplyQuaternions(pitchQuaternion, this.cameraQuaternion);
+            this.cameraQuaternion.normalize();
+            
+            this.updateCameraDirection();
+        }
+    },
+
+    updateCameraDirection() {
+        // 从四元数计算前向向量
+        this.cameraDirection.set(0, 0, -1);
+        this.cameraDirection.applyQuaternion(this.cameraQuaternion);
+        this.cameraDirection.normalize();
+        
+        // 更新相机朝向
+        camera.quaternion.copy(this.cameraQuaternion);
+    },
+
+    updateCameraInfo() {
+        document.getElementById('cameraPos').textContent =
+            `X:${camera.position.x.toFixed(1)}, Y:${camera.position.y.toFixed(1)}, Z:${camera.position.z.toFixed(1)}`;
+
+        // 显示欧拉角信息（调试用）
+        const euler = new THREE.Euler().setFromQuaternion(this.cameraQuaternion, 'YXZ');
+        const yawDeg = (euler.y * 180 / Math.PI).toFixed(1);
+        const pitchDeg = (euler.x * 180 / Math.PI).toFixed(1);
+        document.getElementById('cameraDir').textContent =
+            `偏航:${yawDeg}° 俯仰:${pitchDeg}°`;
+    },
+
+    resetCamera() {
+        camera.position.set(390, 500, 0);
+        this.cameraQuaternion.identity();
+        this.updateCameraDirection();
+    }
+};
+// 星系选择和管理系统
+// 星系选择和管理系统 - 修复版
+const galaxySelectionSystem = {
+  selectedGalaxy: null,
+  userOwnedGalaxies: new Map(),
+  currentUser: 'anonymous',
+  
+  init() {
+    this.setupEventListeners();
+    this.setupRaycaster();
+    this.loadUserData();
+    console.log('星系选择系统初始化完成');
+  },
+  
+  setupEventListeners() {
+    const canvas = renderer.domElement;
+    
+    // 修复：使用 pointerdown 事件，更可靠
+    canvas.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      this.handleClick(event);
+    });
+    
+    // 面板控制
+    document.getElementById('closeInfoPanel').addEventListener('click', () => this.hideInfoPanel());
+    document.getElementById('deselectGalaxy').addEventListener('click', () => this.deselectGalaxy());
+    document.getElementById('purchaseGalaxy').addEventListener('click', () => this.purchaseGalaxy());
+    
+    // ESC键取消选择
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.deselectGalaxy();
+      }
+    });
+    
+    console.log('事件监听器设置完成');
+  },
+  
+  setupRaycaster() {
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+    console.log('射线检测器初始化完成');
+  },
+  
+  // 修复点击处理
+  handleClick(event) {
+    console.log('点击事件触发', event);
+    
+    const rect = renderer.domElement.getBoundingClientRect();
+    
+    // 修复：正确的坐标转换
+    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    console.log('鼠标坐标:', this.mouse.x, this.mouse.y);
+    
+    this.raycaster.setFromCamera(this.mouse, camera);
+    
+    // 收集所有可点击的对象
+    const clickableObjects = [];
+    galaxyManager.galaxies.forEach(galaxy => {
+      clickableObjects.push(galaxy.starField);
+      if (galaxy.dustField) clickableObjects.push(galaxy.dustField);
+      if (galaxy.nebulaField) clickableObjects.push(galaxy.nebulaField);
+      if (galaxy.halo) clickableObjects.push(galaxy.halo);
+    });
+    
+    console.log('检测对象数量:', clickableObjects.length);
+    
+    // 执行射线检测
+    const intersects = this.raycaster.intersectObjects(clickableObjects, true);
+    console.log('交点数量:', intersects.length);
+    
+    if (intersects.length > 0) {
+      const clickedObject = intersects[0].object;
+      console.log('点击到对象:', clickedObject);
+      
+      // 找到对应的星系
+      const galaxy = galaxyManager.galaxies.find(g => 
+        g.starField === clickedObject || 
+        g.dustField === clickedObject ||
+        g.nebulaField === clickedObject ||
+        g.halo === clickedObject
+      );
+      
+      if (galaxy) {
+        console.log('找到星系:', galaxy);
+        this.selectGalaxy(galaxy);
+      } else {
+        console.log('未找到对应星系');
+      }
+    } else {
+      console.log('未点击到任何星系');
+      this.deselectGalaxy();
+    }
+  },
+  
+  // 选择星系
+  selectGalaxy(galaxy) {
+    console.log('选择星系:', galaxy);
+    
+    // 取消之前的选择
+    this.deselectGalaxy();
+    
+    this.selectedGalaxy = galaxy;
+    this.showSelectionIndicator(galaxy);
+    this.showGalaxyInfo(galaxy);
+    
+    // 添加视觉反馈
+    this.highlightGalaxy(galaxy);
+  },
+  
+  // 高亮选中的星系
+  highlightGalaxy(galaxy) {
+    // 临时改变颜色作为视觉反馈
+    const originalColors = galaxy.starField.geometry.attributes.color.array.slice();
+    const colors = galaxy.starField.geometry.attributes.color.array;
+    
+    // 将颜色调亮
+    for (let i = 0; i < colors.length; i += 3) {
+      colors[i] = Math.min(1.0, colors[i] * 1.3);     // R
+      colors[i+1] = Math.min(1.0, colors[i+1] * 1.3); // G
+      colors[i+2] = Math.min(1.0, colors[i+2] * 1.3); // B
+    }
+    
+    galaxy.starField.geometry.attributes.color.needsUpdate = true;
+    
+    // 保存原始颜色以便恢复
+    galaxy.originalColors = originalColors;
+  },
+  
+  // 取消高亮
+  unhighlightGalaxy(galaxy) {
+    if (galaxy.originalColors) {
+      const colors = galaxy.starField.geometry.attributes.color.array;
+      for (let i = 0; i < colors.length; i++) {
+        colors[i] = galaxy.originalColors[i];
+      }
+      galaxy.starField.geometry.attributes.color.needsUpdate = true;
+    }
+  },
+  
+  // 显示选择指示器（简化版）
+  showSelectionIndicator(galaxy) {
+    const indicator = document.getElementById('selectionIndicator');
+    indicator.classList.remove('hidden');
+    
+    // 简化：将指示器放在屏幕中央，因为3D转2D坐标可能有问题
+    indicator.style.left = '50%';
+    indicator.style.top = '50%';
+    indicator.style.transform = 'translate(-50%, -50%)';
+    
+    console.log('显示选择指示器');
+  },
+  
+  // 显示星系信息
+  showGalaxyInfo(galaxy) {
+    const panel = document.getElementById('galaxyInfoPanel');
+    const distance = galaxy.position.distanceTo(camera.position).toFixed(0);
+    
+    // 生成随机名称
+    const galaxyName = this.generateGalaxyName();
+    
+    // 更新基本信息
+    document.getElementById('galaxyName').textContent = galaxyName;
+    document.getElementById('galaxyType').textContent = this.getGalaxyTypeName(galaxy.type);
+    document.getElementById('galaxyRadius').textContent = Math.round(galaxy.params.radius);
+    document.getElementById('galaxyDistance').textContent = distance;
+    
+    // 生成随机描述
+    this.generateGalaxyDescription(galaxy).then(description => {
+      document.getElementById('galaxyDescription').innerHTML = description;
+    });
+    
+    // 检查所有权
+    this.updateOwnershipInfo(galaxy);
+    
+    panel.classList.remove('hidden');
+    console.log('显示星系信息面板');
+  },
+  
+  // 生成随机星系名称
+  generateGalaxyName() {
+    const prefixes = ['NGC', 'IC', 'UGC', 'ESO', 'MCG', 'ARP'];
+    const numbers = ['1234', '4567', '8910', '1121', '3141', '5926', '5358', '9793'];
+    const suffixes = ['A', 'B', 'C', '', '-A', '-B'];
+    
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const number = numbers[Math.floor(Math.random() * numbers.length)];
+    const suffix = suffixes[Math.floor(Math.random() * suffixes.length)];
+    
+    return `${prefix} ${number}${suffix}`;
+  },
+  
+  // 获取星系类型名称
+  getGalaxyTypeName(type) {
+    const typeNames = {
+      'spiral': '旋涡星系',
+      'elliptical': '椭圆星系', 
+      'irregular': '不规则星系',
+      'collision': '碰撞星系'
+    };
+    return typeNames[type] || type;
+  },
+  
+  // 生成星系描述
+  async generateGalaxyDescription(galaxy) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const descriptions = {
+          spiral: [
+            `这个美丽的旋涡星系拥有${galaxy.params.arms}条清晰的旋臂，在宇宙中缓慢旋转。核心区域聚集着年老的黄色恒星，旋臂中分布着年轻的蓝色恒星。`,
+            `该旋涡星系直径约${Math.round(galaxy.params.radius * 2)}光年，是宇宙中最常见的星系类型之一。`,
+            `观测显示这个旋涡星系正处于活跃的恒星形成期，旋臂上的星云区域标志着新的恒星正在诞生。`
+          ],
+          elliptical: [
+            `这个椭圆星系呈现出完美的椭圆形状，主要由年老的红色恒星组成。缺乏气体和尘埃，新的恒星形成活动有限。`,
+            `椭圆星系通常是宇宙中的"老年"星系，其中的恒星大多已经存在了数十亿年。`,
+            `该椭圆星系的恒星分布非常均匀，从核心到边缘密度逐渐降低。`
+          ],
+          irregular: [
+            `这个不规则星系没有明显的结构特征，形状混沌而独特。富含气体和尘埃，正在进行活跃的恒星形成。`,
+            `不规则星系可能是由于引力相互作用而失去了原有的结构。年轻蓝色恒星群格外醒目。`,
+            `该不规则星系的大小相对较小，但恒星形成率却很高。`
+          ],
+          collision: [
+            `这是一对正在发生碰撞的星系，引力相互作用产生了壮观的潮汐尾和恒星流。`,
+            `星系碰撞是宇宙中最壮观的事件之一。气体云的碰撞会触发剧烈的恒星形成。`,
+            `这对碰撞星系最终可能会合并成一个更大的椭圆星系。`
+          ]
+        };
+        
+        const typeDescriptions = descriptions[galaxy.type] || descriptions.spiral;
+        const randomDescription = typeDescriptions[Math.floor(Math.random() * typeDescriptions.length)];
+        
+        resolve(`<p>${randomDescription}</p >`);
+      }, 100);
+    });
+  },
+  
+  // 更新所有权信息
+  updateOwnershipInfo(galaxy) {
+    const ownershipInfo = document.getElementById('ownershipInfo');
+    const purchaseButton = document.getElementById('purchaseGalaxy');
+    
+    if (this.userOwnedGalaxies.has(galaxy)) {
+      ownershipInfo.classList.remove('hidden');
+      purchaseButton.classList.add('hidden');
+      document.getElementById('ownerName').textContent = this.currentUser;
+    } else {
+      ownershipInfo.classList.add('hidden');
+      purchaseButton.classList.remove('hidden');
+    }
+  },
+  
+  // 购买星系
+  purchaseGalaxy() {
+    if (!this.selectedGalaxy) return;
+    
+    this.userOwnedGalaxies.set(this.selectedGalaxy, {
+      purchaseDate: new Date(),
+      purchasePrice: this.calculateGalaxyPrice(this.selectedGalaxy),
+      user: this.currentUser
+    });
+    
+    this.saveUserData();
+    this.showPurchaseSuccess();
+    this.updateOwnershipInfo(this.selectedGalaxy);
+    
+    console.log(`用户 ${this.currentUser} 购买了星系`);
+  },
+  
+  // 计算星系价格
+  calculateGalaxyPrice(galaxy) {
+    const basePrice = 100;
+    const sizeMultiplier = galaxy.params.radius / 50;
+    const typeMultiplier = {
+      'spiral': 1.5,
+      'elliptical': 1.2,
+      'irregular': 1.0,
+      'collision': 2.0
+    }[galaxy.type] || 1.0;
+    
+    return Math.round(basePrice * sizeMultiplier * typeMultiplier);
+  },
+  
+  // 显示购买成功提示
+  showPurchaseSuccess() {
+    const toast = document.getElementById('purchaseToast');
+    toast.classList.remove('hidden');
+    
+    setTimeout(() => {
+      toast.classList.add('hidden');
+    }, 3000);
+  },
+  
+  // 取消选择
+  deselectGalaxy() {
+    if (this.selectedGalaxy) {
+      this.unhighlightGalaxy(this.selectedGalaxy);
+    }
+    
+    this.selectedGalaxy = null;
+    
+    document.getElementById('selectionIndicator').classList.add('hidden');
+    document.getElementById('galaxyInfoPanel').classList.add('hidden');
+    
+    console.log('取消选择星系');
+  },
+  
+  // 隐藏信息面板
+  hideInfoPanel() {
+    document.getElementById('galaxyInfoPanel').classList.add('hidden');
+  },
+  
+  // 加载用户数据
+  loadUserData() {
+    const savedData = localStorage.getItem('userGalaxies');
+    if (savedData) {
+      console.log('加载用户星系数据:', savedData);
+    }
+  },
+  
+  // 保存用户数据
+  saveUserData() {
+    localStorage.setItem('userGalaxies', JSON.stringify({
+      user: this.currentUser,
+      ownedCount: this.userOwnedGalaxies.size
+    }));
+  },
+  
+  // 每帧更新
+  update() {
+    // 这里可以添加每帧更新的逻辑
+  }
+};
+// 星系管理系统
+    const galaxyManager = {
+      galaxies: [],
+      lastUpdate: 0,
+      updateInterval: 100,
+      
+      init() {
+  // 创建初始星系群，按真实比例分布
+  const galaxyPositions = [
+    new THREE.Vector3(0, 0, 0),      // 中心旋涡星系
+    new THREE.Vector3(400, 0, 200),  // 旋涡星系
+    new THREE.Vector3(-300, 0, -150), // 旋涡星系
+    new THREE.Vector3(200, 0, -300),  // 椭圆星系
+    new THREE.Vector3(-200, 0, 350),  // 椭圆星系
+    new THREE.Vector3(500, 0, -100),  // 不规则星系
+    new THREE.Vector3(-100, 0, 500)   // 碰撞星系（稀有）
+  ];
+  
+  const galaxyTypes = ['spiral', 'spiral', 'spiral', 'elliptical', 'elliptical', 'irregular', 'collision'];
+  
+  galaxyPositions.forEach((position, index) => {
+    const type = galaxyTypes[index];
+    let galaxy;
+    
+    switch(type) {
+      case 'elliptical':
+        galaxy = this.createEllipticalGalaxy({
+          position: position,
+          radius: 40 + Math.random() * 20,
+          rotationSpeed: 0.0008 + Math.random() * 0.0004,
+          rotationAngle: Math.random() * Math.PI * 2
+        });
+        break;
+      case 'irregular':
+        galaxy = this.createIrregularGalaxy({
+          position: position,
+          radius: 30 + Math.random() * 15,
+          rotationSpeed: 0.001 + Math.random() * 0.0005,
+          rotationAngle: Math.random() * Math.PI * 2
+        });
+        break;
+      case 'collision':
+        galaxy = this.createCollidingGalaxy({
+          position: position,
+          radius: 50 + Math.random() * 20,
+          arms: 3,
+          armTwist: 0.15,
+          rotationSpeed: 0.0012 + Math.random() * 0.0003,
+          rotationAngle: Math.random() * Math.PI * 2
+        });
+        break;
+      default: // spiral
+        galaxy = this.createSpiralGalaxy({
+          position: position,
+          radius: 45 + Math.random() * 25,
+          arms: 2 + Math.floor(Math.random() * 3), // 2-4条旋臂
+          armTwist: 0.15 + Math.random() * 0.1,
+          rotationSpeed: 0.0015 + Math.random() * 0.0005,
+          rotationAngle: Math.random() * Math.PI * 2
+        });
+    }
+    
+    this.galaxies.push(galaxy);
+    
+    // 添加到场景
+    scene.add(galaxy.starField);
+    scene.add(galaxy.dustField);
+    scene.add(galaxy.nebulaField);
+    scene.add(galaxy.halo);
+    
+    // 如果是碰撞星系，添加第二个星系
+    if (galaxy.type === 'collision' && galaxy.galaxy2) {
+      scene.add(galaxy.galaxy2.starField);
+      scene.add(galaxy.galaxy2.dustField);
+      scene.add(galaxy.galaxy2.nebulaField);
+      scene.add(galaxy.galaxy2.halo);
+      scene.add(galaxy.bridgeField);
+    }
+  });
+},
+      
+      createGalaxyByType(params) {
+  // 确保有随机三维朝向
+  if (!params.orientation) {
+    const randomEuler = new THREE.Euler(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,  
+      Math.random() * Math.PI * 2
+    );
+    params.orientation = new THREE.Quaternion().setFromEuler(randomEuler);
+  }
+  
+  switch(params.type) {
+    case 'elliptical':
+      return this.createEllipticalGalaxy(params);
+    case 'irregular':
+      return this.createIrregularGalaxy(params);
+    case 'collision':
+      return this.createCollidingGalaxy(params);
+    default:
+      return this.createSpiralGalaxy(params);
+  }
+},
+      
+      // 创建旋涡星系
+      // 创建旋涡星系
+// 创建旋涡星系
+// 创建旋涡星系
+// 创建旋涡星系 - 修复版
+createSpiralGalaxy(params) {
+  console.log('创建旋涡星系，使用三维随机朝向');
+
+  const stars = [];
+  const starGeometry = new THREE.BufferGeometry();
+  const starCount = universeParams.starCount;
+  const starPositions = new Float32Array(starCount * 3);
+  const starColors = new Float32Array(starCount * 3);
+  const starSizes = new Float32Array(starCount);
+  const starTypes = new Uint8Array(starCount);
+
+  // 创建旋转矩阵
+  const rotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(params.orientation);
+
+  for (let i = 0; i < starCount; i++) {
+    const i3 = i * 3;
+    const typeProb = Math.random();
+
+    // 创建局部坐标（在XY平面内）
+    let localPosition = new THREE.Vector3();
+    
+    if (typeProb < 0.1) {
+      // 核心恒星
+      starTypes[i] = 0;
+      const radius = Math.random() * params.radius * 0.1;
+      const angle = Math.random() * Math.PI * 2;
+      
+      localPosition.set(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * radius,
+        (Math.random() - 0.5) * params.radius * 0.03
+      );
+      
+      starColors[i3] = 0.9 + Math.random() * 0.1;
+      starColors[i3+1] = 0.8 + Math.random() * 0.1;
+      starColors[i3+2] = 0.3 + Math.random() * 0.1;
+      starSizes[i] = 0.2 + Math.random() * 0.3;
+    } 
+    else if (typeProb < 0.7) {
+      // 旋臂恒星
+      starTypes[i] = 1;
+      const arm = Math.floor(Math.random() * params.arms);
+      const distance = Math.random() * params.radius * 0.8;
+      
+      const baseArmAngle = arm * (Math.PI * 2 / params.arms);
+      const twistAngle = distance * params.armTwist;
+      const randomOffset = Math.random() * 0.2;
+      const angle = baseArmAngle + twistAngle + randomOffset;
+      
+      const offset = (Math.random() - 0.5) * params.radius * 0.05;
+      
+      localPosition.set(
+        Math.cos(angle) * (distance + offset),
+        Math.sin(angle) * (distance + offset),
+        (Math.random() - 0.5) * params.radius * 0.01
+      );
+      
+      const colorFactor = 0.5 + (distance / params.radius) * 0.5;
+      starColors[i3] = 0.2 + colorFactor * 0.3;
+      starColors[i3+1] = 0.4 + colorFactor * 0.3;
+      starColors[i3+2] = 0.8 + colorFactor * 0.1;
+      starSizes[i] = 0.05 + Math.random() * 0.15;
+    } 
+    else if (typeProb < 0.95) {
+      // 光晕恒星
+      starTypes[i] = 2;
+      const radius = Math.random() * params.radius;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      
+      localPosition.set(
+        radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.sin(phi) * Math.sin(theta),
+        radius * Math.cos(phi)
+      );
+      
+      starColors[i3] = 0.6 + Math.random() * 0.1;
+      starColors[i3+1] = 0.2 + Math.random() * 0.1;
+      starColors[i3+2] = 0.1 + Math.random() * 0.05;
+      starSizes[i] = 0.03 + Math.random() * 0.07;
+    } else {
+      // 球状星团恒星
+      starTypes[i] = 3;
+      const clusterRadius = Math.random() * 2 + 0.5;
+      const clusterDistance = Math.random() * (params.radius * 0.9) + params.radius * 0.1;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+
+      const clusterCenter = new THREE.Vector3(
+        clusterDistance * Math.sin(phi) * Math.cos(theta),
+        clusterDistance * Math.sin(phi) * Math.sin(theta),
+        clusterDistance * Math.cos(phi)
+      );
+
+      const starTheta = Math.random() * Math.PI * 2;
+      const starPhi = Math.acos(2 * Math.random() - 1);
+      const starRadius = Math.random() * clusterRadius;
+
+      localPosition.set(
+        clusterCenter.x + starRadius * Math.sin(starPhi) * Math.cos(starTheta),
+        clusterCenter.y + starRadius * Math.sin(starPhi) * Math.sin(starTheta),
+        clusterCenter.z + starRadius * Math.cos(starPhi)
+      );
+
+      starColors[i3] = 0.7 + Math.random() * 0.1;
+      starColors[i3+1] = 0.3 + Math.random() * 0.1;
+      starColors[i3+2] = 0.1 + Math.random() * 0.05;
+      starSizes[i] = 0.04 + Math.random() * 0.06;
+    }
+
+    // 应用三维旋转
+    localPosition.applyMatrix4(rotationMatrix);
+    
+    // 移动到世界位置
+    starPositions[i3] = localPosition.x + params.position.x;
+    starPositions[i3+1] = localPosition.y + params.position.y;
+    starPositions[i3+2] = localPosition.z + params.position.z;
+
+    stars.push({
+      position: new THREE.Vector3(starPositions[i3], starPositions[i3+1], starPositions[i3+2]),
+      localPosition: localPosition.clone(),
+      distance: localPosition.length(),
+      type: starTypes[i],
+      home: params.position,
+      orientation: params.orientation
+    });
+  }
+
+  starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+  starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+  starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+  const starMaterial = new THREE.PointsMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    size: 0.5
+  });
+
+  const starField = new THREE.Points(starGeometry, starMaterial);
+
+  // 其他组件也使用相同的朝向
+  const dustField = this.createDustCloud({...params});
+  const nebulaField = this.createNebula({...params});
+  const halo = this.createHalo({...params});
+
+  return {
+    position: params.position,
+    starField,
+    dustField,
+    nebulaField,
+    halo,
+    stars,
+    params: {...params},
+    type: 'spiral'
+  };
+},
+      
+      // 创建椭圆星系
+      createEllipticalGalaxy(params) {
+        const stars = [];
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = universeParams.starCount;
+        const starPositions = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+        const starSizes = new Float32Array(starCount);
+
+        const galaxyRotation = params.rotationAngle || 0;
+
+        for (let i = 0; i < starCount; i++) {
+          const i3 = i * 3;
+          
+          // 椭圆分布
+          const radius = Math.pow(Math.random(), 0.5) * params.radius;
+          const theta = Math.random() * Math.PI * 2 + galaxyRotation;
+          const phi = Math.acos(2 * Math.random() - 1);
+          
+          // 椭圆形状 - 在Z轴方向压缩
+          const x = radius * Math.sin(phi) * Math.cos(theta);
+          const y = radius * Math.sin(phi) * Math.sin(theta);
+          const z = radius * Math.cos(phi) * 0.3; // 压缩Z轴
+
+          starPositions[i3] = x + params.position.x;
+          starPositions[i3+1] = y + params.position.y;
+          starPositions[i3+2] = z + params.position.z;
+
+          // 椭圆星系通常更红/黄
+          const colorFactor = 0.3 + Math.random() * 0.4;
+          starColors[i3] = 0.8 + colorFactor * 0.2;
+          starColors[i3+1] = 0.6 + colorFactor * 0.2;
+          starColors[i3+2] = 0.2 + colorFactor * 0.2;
+
+          starSizes[i] = 0.05 + Math.random() * 0.15;
+
+          stars.push({
+            position: new THREE.Vector3(starPositions[i3], starPositions[i3+1], starPositions[i3+2]),
+            distance: Math.sqrt(x*x + y*y),
+            home: params.position,
+            rotationAngle: galaxyRotation
+          });
+        }
+
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+        const starMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.9,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 0.5
+        });
+
+        const starField = new THREE.Points(starGeometry, starMaterial);
+
+        // 椭圆星系尘埃较少
+        const dustField = this.createDustCloud({...params, count: universeParams.dustCount * 0.5});
+        const nebulaField = this.createNebula({...params, count: universeParams.nebulaCount * 0.3});
+        const halo = this.createHalo({...params, count: universeParams.haloCount * 0.7});
+
+        return {
+          position: params.position,
+  starField,
+  dustField,
+  nebulaField,
+  halo,
+  stars,
+  params,
+  type: 'elliptical'
+
+        };
+      },
+      
+      // 创建不规则星系
+      createIrregularGalaxy(params) {
+        const stars = [];
+        const starGeometry = new THREE.BufferGeometry();
+        const starCount = universeParams.starCount;
+        const starPositions = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+        const starSizes = new Float32Array(starCount);
+
+        const galaxyRotation = params.rotationAngle || 0;
+
+        for (let i = 0; i < starCount; i++) {
+          const i3 = i * 3;
+          
+          // 不规则分布
+          const radius = Math.random() * params.radius;
+          const theta = Math.random() * Math.PI * 2 + galaxyRotation;
+          const phi = Math.acos(2 * Math.random() - 1);
+          
+          // 添加随机偏移使形状不规则
+          const irregularity = 0.3;
+          const x = radius * Math.sin(phi) * Math.cos(theta) * (1 + (Math.random() - 0.5) * irregularity);
+          const y = radius * Math.sin(phi) * Math.sin(theta) * (1 + (Math.random() - 0.5) * irregularity);
+          const z = radius * Math.cos(phi) * (1 + (Math.random() - 0.5) * irregularity);
+
+          starPositions[i3] = x + params.position.x;
+          starPositions[i3+1] = y + params.position.y;
+          starPositions[i3+2] = z + params.position.z;
+
+          // 不规则星系通常更蓝（年轻恒星）
+          starColors[i3] = 0.2 + Math.random() * 0.3;
+          starColors[i3+1] = 0.4 + Math.random() * 0.3;
+          starColors[i3+2] = 0.8 + Math.random() * 0.2;
+
+          starSizes[i] = 0.05 + Math.random() * 0.2;
+
+          stars.push({
+            position: new THREE.Vector3(starPositions[i3], starPositions[i3+1], starPositions[i3+2]),
+            distance: Math.sqrt(x*x + y*y),
+            home: params.position,
+            rotationAngle: galaxyRotation
+          });
+        }
+
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+        starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+        const starMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.9,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 0.5
+        });
+
+        const starField = new THREE.Points(starGeometry, starMaterial);
+
+        // 不规则星系有更多尘埃和星云
+        const dustField = this.createDustCloud({...params, count: universeParams.dustCount * 1.5});
+        const nebulaField = this.createNebula({...params, count: universeParams.nebulaCount * 2});
+        const halo = this.createHalo({...params, count: universeParams.haloCount * 0.5});
+
+        return {
+          position: params.position,
+  starField,
+  dustField,
+  nebulaField,
+  halo,
+  stars,
+  params,
+  type: 'irregular'
+
+        };
+      },
+// 创建碰撞星系
+      createCollidingGalaxy(params) {
+        // 创建两个靠近的星系模拟碰撞
+        const galaxy1 = this.createSpiralGalaxy({
+          ...params,
+          position: new THREE.Vector3(params.position.x - params.radius * 0.7, params.position.y, params.position.z),
+          radius: params.radius * 0.8
+        });
+        
+        const galaxy2 = this.createSpiralGalaxy({
+          ...params,
+          position: new THREE.Vector3(params.position.x + params.radius * 0.7, params.position.y, params.position.z),
+          radius: params.radius * 0.6,
+          rotationAngle: params.rotationAngle + Math.PI * 0.7 // 不同角度
+        });
+        
+        // 合并两个星系
+        const mergedStars = [...galaxy1.stars, ...galaxy2.stars];
+        
+        // 创建连接两个星系的星流
+        const bridgeGeometry = new THREE.BufferGeometry();
+        const bridgeCount = 500;
+        const bridgePositions = new Float32Array(bridgeCount * 3);
+        const bridgeColors = new Float32Array(bridgeCount * 3);
+        const bridgeSizes = new Float32Array(bridgeCount);
+        
+        for (let i = 0; i < bridgeCount; i++) {
+          const i3 = i * 3;
+          const t = Math.random();
+          const x = galaxy1.position.x * (1 - t) + galaxy2.position.x * t;
+          const y = galaxy1.position.y * (1 - t) + galaxy2.position.y * t;
+          const z = galaxy1.position.z * (1 - t) + galaxy2.position.z * t;
+          
+          // 添加随机偏移
+          const offset = 20;
+          bridgePositions[i3] = x + (Math.random() - 0.5) * offset;
+          bridgePositions[i3+1] = y + (Math.random() - 0.5) * offset;
+          bridgePositions[i3+2] = z + (Math.random() - 0.5) * offset;
+          
+          bridgeColors[i3] = 0.6 + Math.random() * 0.2;
+          bridgeColors[i3+1] = 0.4 + Math.random() * 0.2;
+          bridgeColors[i3+2] = 0.2 + Math.random() * 0.1;
+          
+          bridgeSizes[i] = 0.05 + Math.random() * 0.1;
+        }
+        
+        bridgeGeometry.setAttribute('position', new THREE.BufferAttribute(bridgePositions, 3));
+        bridgeGeometry.setAttribute('color', new THREE.BufferAttribute(bridgeColors, 3));
+        bridgeGeometry.setAttribute('size', new THREE.BufferAttribute(bridgeSizes, 1));
+        
+        const bridgeMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.7,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 0.5
+        });
+        
+        const bridgeField = new THREE.Points(bridgeGeometry, bridgeMaterial);
+        scene.add(bridgeField);
+        
+        return {
+          position: params.position,
+  starField: galaxy1.starField,
+  dustField: galaxy1.dustField,
+  nebulaField: galaxy1.nebulaField,
+  halo: galaxy1.halo,
+  stars: mergedStars,
+  params,
+  type: 'collision',
+  galaxy2: galaxy2,
+  bridgeField
+
+        };
+      },
+      
+      createDustCloud(params) {
+        const count = params.count || universeParams.dustCount;
+  const dustGeometry = new THREE.BufferGeometry();
+  const dustPositions = new Float32Array(count * 3);
+  const dustColors = new Float32Array(count * 3);
+  const dustSizes = new Float32Array(count);
+
+  // 使用传入的随机方向
+  const galaxyRotation = params.rotationAngle || 0;
+
+  for (let i = 0; i < count; i++) {
+    const i3 = i * 3;
+    const distance = Math.random() * params.radius * 0.9;
+    const angle = Math.random() * Math.PI * 2 + galaxyRotation; // 应用随机方向
+    const offset = (Math.random() - 0.5) * params.radius * 0.1;
+    const height = (Math.random() - 0.5) * params.radius * 0.03;
+
+    dustPositions[i3] = Math.cos(angle) * (distance + offset) + params.position.x;
+    dustPositions[i3+1] = Math.sin(angle) * (distance + offset) + params.position.y;
+    dustPositions[i3+2] = height + params.position.z;
+
+    dustColors[i3] = 0.4 + Math.random() * 0.1;
+    dustColors[i3+1] = 0.2 + Math.random() * 0.05;
+    dustColors[i3+2] = 0.05 + Math.random() * 0.05;
+
+    dustSizes[i] = 0.1 + Math.random() * 0.2;
+  }
+
+
+
+        const dustMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.7,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 1.0
+        });
+
+        return new THREE.Points(dustGeometry, dustMaterial);
+      },
+      
+      createNebula(params) {
+        const count = params.count || universeParams.nebulaCount;
+        const nebulaGeometry = new THREE.BufferGeometry();
+        const nebulaPositions = new Float32Array(count * 3);
+        const nebulaColors = new Float32Array(count * 3);
+        const nebulaSizes = new Float32Array(count);
+
+        const galaxyRotation = params.rotationAngle || 0;
+
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+          const distance = Math.random() * params.radius * 0.8;
+          const angle = Math.random() * Math.PI * 2 + galaxyRotation;
+          const offset = (Math.random() - 0.5) * params.radius * 0.2;
+          const height = (Math.random() - 0.5) * params.radius * 0.05;
+
+          nebulaPositions[i3] = Math.cos(angle) * (distance + offset) + params.position.x;
+          nebulaPositions[i3+1] = Math.sin(angle) * (distance + offset) + params.position.y;
+          nebulaPositions[i3+2] = height + params.position.z;
+
+          // 更丰富的星云颜色
+          const colorType = Math.random();
+          if (colorType < 0.3) {
+            // 红色星云
+            nebulaColors[i3] = 0.7 + Math.random() * 0.2;
+            nebulaColors[i3+1] = 0.1 + Math.random() * 0.1;
+            nebulaColors[i3+2] = 0.1 + Math.random() * 0.1;
+          } else if (colorType < 0.6) {
+            // 蓝色星云
+            nebulaColors[i3] = 0.1 + Math.random() * 0.1;
+            nebulaColors[i3+1] = 0.3 + Math.random() * 0.2;
+            nebulaColors[i3+2] = 0.7 + Math.random() * 0.2;
+          } else {
+            // 紫色星云
+            nebulaColors[i3] = 0.5 + Math.random() * 0.2;
+            nebulaColors[i3+1] = 0.2 + Math.random() * 0.1;
+            nebulaColors[i3+2] = 0.6 + Math.random() * 0.2;
+          }
+
+          nebulaSizes[i] = 1.5 + Math.random() * 2.5;
+        }
+
+        nebulaGeometry.setAttribute('position', new THREE.BufferAttribute(nebulaPositions, 3));
+        nebulaGeometry.setAttribute('color', new THREE.BufferAttribute(nebulaColors, 3));
+        nebulaGeometry.setAttribute('size', new THREE.BufferAttribute(nebulaSizes, 1));
+
+        const nebulaMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.4,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 2.0
+        });
+
+        return new THREE.Points(nebulaGeometry, nebulaMaterial);
+      },
+      
+      createHalo(params) {
+        const count = params.count || universeParams.haloCount;
+        const haloGeometry = new THREE.BufferGeometry();
+        const haloPositions = new Float32Array(count * 3);
+        const haloColors = new Float32Array(count * 3);
+        const haloSizes = new Float32Array(count);
+
+        const galaxyRotation = params.rotationAngle || 0;
+
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+          const radius = params.radius * (0.9 + Math.random() * 0.3);
+          const theta = Math.random() * Math.PI * 2 + galaxyRotation;
+          const phi = Math.acos(2 * Math.random() - 1);
+
+          haloPositions[i3] = radius * Math.sin(phi) * Math.cos(theta) + params.position.x;
+          haloPositions[i3+1] = radius * Math.sin(phi) * Math.sin(theta) + params.position.y;
+          haloPositions[i3+2] = radius * Math.cos(phi) + params.position.z;
+
+          haloColors[i3] = 0.1 + Math.random() * 0.05;
+          haloColors[i3+1] = 0.2 + Math.random() * 0.1;
+          haloColors[i3+2] = 0.4 + Math.random() * 0.1;
+
+          haloSizes[i] = 0.05 + Math.random() * 0.1;
+        }
+
+        haloGeometry.setAttribute('position', new THREE.BufferAttribute(haloPositions, 3));
+        haloGeometry.setAttribute('color', new THREE.BufferAttribute(haloColors, 3));
+        haloGeometry.setAttribute('size', new THREE.BufferAttribute(haloSizes, 1));
+
+        const haloMaterial = new THREE.PointsMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.3,
+          sizeAttenuation: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+          size: 1.0
+        });
+
+        return new THREE.Points(haloGeometry, haloMaterial);
+      },
+      
+updateVisibleGalaxies() {
+  const cameraPos = camera.position;
+  let visibleCount = 0;
+  
+  // 先确保所有星系都在正确状态
+  for (const galaxy of this.galaxies) {
+    const absoluteDistance = galaxy.position.length();
+    
+    // 计算距离衰减因子
+    let visibilityFactor = 1.0;
+    let scaleFactor = 1.0;
+    
+    if (absoluteDistance <= universeParams.renderDistance) {
+      visibilityFactor = 1.0;
+      scaleFactor = 1.0;
+      visibleCount++;
+    } else {
+      const excessDistance = absoluteDistance - universeParams.renderDistance;
+      const maxFadeDistance = universeParams.renderDistance * 0.5;
+      
+      if (excessDistance <= maxFadeDistance) {
+        visibilityFactor = 1.0 - (excessDistance / maxFadeDistance);
+        scaleFactor = 0.1 + (visibilityFactor * 0.9);
+        visibleCount++;
+      } else {
+        visibilityFactor = 0.1;
+        scaleFactor = 0.05;
+      }
+    }
+    
+    this.updateGalaxyAppearance(galaxy, visibilityFactor, scaleFactor);
+    
+    // 确保所有星系都在场景中
+    if (!scene.children.includes(galaxy.starField)) {
+      this.addGalaxyToScene(galaxy);
+    }
+  }
+  
+  document.getElementById('visibleGalaxies').textContent = visibleCount;
+  
+  // 无限生成逻辑：始终生成新星系
+  const volume = (4/3) * Math.PI * Math.pow(universeParams.renderDistance, 3);
+  const targetCount = Math.floor(volume * universeParams.galaxyDensity * universeParams.densityMultiplier);
+  const currentCount = this.galaxies.length;
+  
+  // 如果当前星系数量少于目标数量，就生成新的
+  if (currentCount < targetCount && currentCount < universeParams.maxVisible) {
+    const needed = Math.min(5, targetCount - currentCount); // 每次最多生成5个
+    
+    for (let i = 0; i < needed; i++) {
+      this.createAndAddGalaxy(cameraPos);
+    }
+  }
+  
+  document.getElementById('galaxyCount').textContent = `星系: ${this.galaxies.length}`;
+},
+      
+      createAndAddGalaxy(nearPosition) {
+  let position;
+  let attempts = 0;
+  
+  do {
+    const angle1 = Math.random() * Math.PI * 2;
+    const angle2 = Math.random() * Math.PI * 2;
+    const distance = Math.random() * universeParams.renderDistance * 1.5 + universeParams.minDistance;
+    
+    position = new THREE.Vector3(
+      Math.cos(angle1) * Math.sin(angle2) * distance,
+      Math.sin(angle1) * Math.sin(angle2) * distance,
+      Math.cos(angle2) * distance
+    );
+    
+    attempts++;
+    if (attempts >= 100) break;
+  } while (
+    this.galaxies.some(g => g.position.distanceTo(position) < universeParams.minDistance)
+  );
+  
+  const radius = 25 + Math.random() * 35;
+  const arms = Math.floor(Math.random() * 3) + 2;
+  const armTwist = 0.15 + Math.random() * 0.1;
+  const rotationSpeed = 0.001 + Math.random() * 0.001;
+  
+  // 生成完全随机的三维朝向
+  const randomQuaternion = new THREE.Quaternion();
+  randomQuaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1), // 默认朝向 (Z轴正方向)
+    new THREE.Vector3(
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1, 
+      Math.random() * 2 - 1
+    ).normalize() // 随机方向向量
+  );
+  
+  // 或者使用欧拉角方法（更简单）
+  const randomEuler = new THREE.Euler(
+    Math.random() * Math.PI * 2,  // x轴旋转
+    Math.random() * Math.PI * 2,  // y轴旋转  
+    Math.random() * Math.PI * 2   // z轴旋转
+  );
+  const orientation = new THREE.Quaternion().setFromEuler(randomEuler);
+  
+  console.log(`创建新星系，随机三维朝向`);
+  
+  // 按真实宇宙比例随机选择星系类型
+  const rand = Math.random();
+  let type;
+  if (rand < 0.77) {
+    type = 'spiral';
+  } else if (rand < 0.97) {
+    type = 'elliptical';
+  } else if (rand < 0.999) {
+    type = 'irregular';
+  } else {
+    type = 'collision';
+  }
+  
+  const params = {
+    position,
+    radius,
+    arms,
+    armTwist,
+    rotationSpeed,
+    orientation,  // 使用三维朝向而不是二维角度
+    type: type
+  };
+  
+  const galaxy = this.createGalaxyByType(params);
+  this.galaxies.push(galaxy);
+
+  
+  // 直接添加到场景
+  scene.add(galaxy.starField);
+  scene.add(galaxy.dustField);
+  scene.add(galaxy.nebulaField);
+  scene.add(galaxy.halo);
+  
+  // 如果是碰撞星系，添加第二个星系和桥接
+  if (galaxy.type === 'collision' && galaxy.galaxy2) {
+    scene.add(galaxy.galaxy2.starField);
+    scene.add(galaxy.galaxy2.dustField);
+    scene.add(galaxy.galaxy2.nebulaField);
+    scene.add(galaxy.galaxy2.halo);
+    scene.add(galaxy.bridgeField);
+  }
+  
+  return galaxy;
+},
+      
+      updateRotations(speed) {
+        const now = Date.now();
+        if (now - this.lastUpdate < this.updateInterval) return;
+        
+        for (const galaxy of this.galaxies) {
+          const distance = galaxy.position.distanceTo(camera.position);
+          if (distance <= universeParams.renderDistance) {
+            this.updateGalaxy(galaxy, speed);
+            
+            // 如果是碰撞星系，更新第二个星系
+            if (galaxy.type === 'collision' && galaxy.galaxy2) {
+              this.updateGalaxy(galaxy.galaxy2, speed);
+              
+              // 更新桥接
+              this.updateGalaxyBridge(galaxy, speed);
+            }
+          }
+        }
+        
+        this.lastUpdate = now;
+      },
+      // 更新星系外观（透明度和缩放）
+// 更新星系外观（基于距离的视觉效果）
+updateGalaxyAppearance(galaxy, visibility, scale) {
+  // 恒星场 - 最明显的部分
+  galaxy.starField.material.opacity = visibility;
+  galaxy.starField.scale.set(scale, scale, scale);
+  
+  // 尘埃云 - 比恒星更快衰减
+  const dustVisibility = Math.max(0, visibility - 0.3);
+  galaxy.dustField.material.opacity = dustVisibility;
+  galaxy.dustField.scale.set(scale * 0.8, scale * 0.8, scale * 0.8);
+  
+  // 星云 - 更快衰减
+  const nebulaVisibility = Math.max(0, visibility - 0.5);
+  galaxy.nebulaField.material.opacity = nebulaVisibility;
+  galaxy.nebulaField.scale.set(scale * 0.6, scale * 0.6, scale * 0.6);
+  
+  // 光晕 - 最快衰减
+  const haloVisibility = Math.max(0, visibility - 0.7);
+  galaxy.halo.material.opacity = haloVisibility;
+  galaxy.halo.scale.set(scale * 0.4, scale * 0.4, scale * 0.4);
+  
+  // 如果是碰撞星系，更新第二个星系
+  if (galaxy.type === 'collision' && galaxy.galaxy2) {
+    galaxy.galaxy2.starField.material.opacity = visibility;
+    galaxy.galaxy2.starField.scale.set(scale, scale, scale);
+    
+    galaxy.galaxy2.dustField.material.opacity = dustVisibility;
+    galaxy.galaxy2.dustField.scale.set(scale * 0.8, scale * 0.8, scale * 0.8);
+    
+    galaxy.galaxy2.nebulaField.material.opacity = nebulaVisibility;
+    galaxy.galaxy2.nebulaField.scale.set(scale * 0.6, scale * 0.6, scale * 0.6);
+    
+    galaxy.galaxy2.halo.material.opacity = haloVisibility;
+    galaxy.galaxy2.halo.scale.set(scale * 0.4, scale * 0.4, scale * 0.4);
+    
+    if (galaxy.bridgeField) {
+      galaxy.bridgeField.material.opacity = visibility * 0.5;
+      galaxy.bridgeField.scale.set(scale, scale, scale);
+    }
+  }
+},
+
+// 添加星系到场景
+addGalaxyToScene(galaxy) {
+  scene.add(galaxy.starField);
+  scene.add(galaxy.dustField);
+  scene.add(galaxy.nebulaField);
+  scene.add(galaxy.halo);
+  
+  if (galaxy.type === 'collision' && galaxy.galaxy2) {
+    scene.add(galaxy.galaxy2.starField);
+    scene.add(galaxy.galaxy2.dustField);
+    scene.add(galaxy.galaxy2.nebulaField);
+    scene.add(galaxy.galaxy2.halo);
+    if (galaxy.bridgeField) scene.add(galaxy.bridgeField);
+  }
+},
+
+// 从场景移除星系
+removeGalaxyFromScene(galaxy) {
+  scene.remove(galaxy.starField);
+  scene.remove(galaxy.dustField);
+  scene.remove(galaxy.nebulaField);
+  scene.remove(galaxy.halo);
+  
+  if (galaxy.type === 'collision' && galaxy.galaxy2) {
+    scene.remove(galaxy.galaxy2.starField);
+    scene.remove(galaxy.galaxy2.dustField);
+    scene.remove(galaxy.galaxy2.nebulaField);
+    scene.remove(galaxy.galaxy2.halo);
+    if (galaxy.bridgeField) scene.remove(galaxy.bridgeField);
+  }
+},
+      updateGalaxy(galaxy, speed) {
+        const positions = galaxy.starField.geometry.attributes.position.array;
+        
+        for (let i = 0; i < galaxy.stars.length; i++) {
+          const i3 = i * 3;
+          const star = galaxy.stars[i];
+          
+          // 计算新角度
+          const baseAngle = Math.atan2(star.position.y - star.home.y, star.position.x - star.home.x) - star.rotationAngle;
+          const newAngle = baseAngle + galaxy.params.rotationSpeed * speed + star.rotationAngle;
+          
+          let newDistance = star.distance;
+          switch(star.type) {
+            case 0: // 核心
+              newDistance += 0.0005 * speed;
+              break;
+            case 1: // 旋臂
+              newDistance += (Math.random() - 0.5) * 0.003 * speed;
+              break;
+            case 2: // 光晕
+              newDistance -= 0.0003 * speed;
+              break;
+            case 3: // 球状星团
+              newDistance += (Math.random() - 0.5) * 0.001 * speed;
+              break;
+            default: // 椭圆或不规则星系
+              newDistance += (Math.random() - 0.5) * 0.002 * speed;
+          }
+          
+          positions[i3] = Math.cos(newAngle) * newDistance + star.home.x;
+          positions[i3+1] = Math.sin(newAngle) * newDistance + star.home.y;
+          
+          // 椭圆星系在Z轴方向运动较小
+          if (galaxy.type === 'elliptical') {
+            positions[i3+2] += (Math.random() - 0.5) * 0.001 * speed;
+          } else {
+            positions[i3+2] += (Math.random() - 0.5) * 0.005 * speed;
+          }
+          
+          star.position.set(positions[i3], positions[i3+1], positions[i3+2]);
+          star.distance = newDistance;
+        }
+        
+        galaxy.starField.geometry.attributes.position.needsUpdate = true;
+        
+        // 更新尘埃云
+        const dustPositions = galaxy.dustField.geometry.attributes.position.array;
+        for (let i = 0; i < dustPositions.length; i += 3) {
+          const x = dustPositions[i] - galaxy.params.position.x;
+          const y = dustPositions[i+1] - galaxy.params.position.y;
+          const baseAngle = Math.atan2(y, x) - galaxy.params.rotationAngle;
+          const newAngle = baseAngle + galaxy.params.rotationSpeed * speed + galaxy.params.rotationAngle;
+          const distance = Math.sqrt(x * x + y * y);
+          
+          dustPositions[i] = Math.cos(newAngle) * distance + galaxy.params.position.x;
+          dustPositions[i+1] = Math.sin(newAngle) * distance + galaxy.params.position.y;
+        }
+        galaxy.dustField.geometry.attributes.position.needsUpdate = true;
+        
+        // 更新星云
+        const nebulaPositions = galaxy.nebulaField.geometry.attributes.position.array;
+        for (let i = 0; i < nebulaPositions.length; i += 3) {
+          const x = nebulaPositions[i] - galaxy.params.position.x;
+          const y = nebulaPositions[i+1] - galaxy.params.position.y;
+          const baseAngle = Math.atan2(y, x) - galaxy.params.rotationAngle;
+          const newAngle = baseAngle + galaxy.params.rotationSpeed * speed + galaxy.params.rotationAngle;
+          const distance = Math.sqrt(x * x + y * y);
+          
+          nebulaPositions[i] = Math.cos(newAngle) * distance + galaxy.params.position.x;
+          nebulaPositions[i+1] = Math.sin(newAngle) * distance + galaxy.params.position.y;
+        }
+        galaxy.nebulaField.geometry.attributes.position.needsUpdate = true;
+        
+        // 更新光晕
+        const haloPositions = galaxy.halo.geometry.attributes.position.array;
+        for (let i = 0; i < haloPositions.length; i += 3) {
+          const x = haloPositions[i] - galaxy.params.position.x;
+          const y = haloPositions[i+1] - galaxy.params.position.y;
+          const baseAngle = Math.atan2(y, x) - galaxy.params.rotationAngle;
+          const newAngle = baseAngle + galaxy.params.rotationSpeed * speed + galaxy.params.rotationAngle;
+          const distance = Math.sqrt(x * x + y * y);
+          
+          haloPositions[i] = Math.cos(newAngle) * distance + galaxy.params.position.x;
+          haloPositions[i+1] = Math.sin(newAngle) * distance + galaxy.params.position.y;
+        }
+        galaxy.halo.geometry.attributes.position.needsUpdate = true;
+      },
+      
+      updateGalaxyBridge(galaxy, speed) {
+        if (!galaxy.bridgeField) return;
+        
+        const positions = galaxy.bridgeField.geometry.attributes.position.array;
+        
+        // 简单地在两个星系之间移动桥接粒子
+        for (let i = 0; i < positions.length; i += 3) {
+          const t = (Math.sin(Date.now() * 0.001 + i * 0.01) + 1) * 0.5;
+          const x = galaxy.position.x * (1 - t) + galaxy.galaxy2.position.x * t;
+          const y = galaxy.position.y * (1 - t) + galaxy.galaxy2.position.y * t;
+          const z = galaxy.position.z * (1 - t) + galaxy.galaxy2.position.z * t;
+          
+          const offset = 20;
+          positions[i] = x + (Math.random() - 0.5) * offset;
+          positions[i+1] = y + (Math.random() - 0.5) * offset;
+          positions[i+2] = z + (Math.random() - 0.5) * offset;
+        }
+        
+        galaxy.bridgeField.geometry.attributes.position.needsUpdate = true;
+      },
+      
+      clearAllGalaxies() {
+        for (const galaxy of this.galaxies) {
+          scene.remove(galaxy.starField);
+          scene.remove(galaxy.dustField);
+          scene.remove(galaxy.nebulaField);
+          scene.remove(galaxy.halo);
+          
+          if (galaxy.type === 'collision' && galaxy.galaxy2) {
+            scene.remove(galaxy.galaxy2.starField);
+            scene.remove(galaxy.galaxy2.dustField);
+            scene.remove(galaxy.galaxy2.nebulaField);
+            scene.remove(galaxy.galaxy2.halo);
+            scene.remove(galaxy.bridgeField);
+          }
+        }
+        
+        this.galaxies = [];
+      }
+    };
+
+    // 后期处理
+    const composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    
+    const bloomPass = new THREE.UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.8,
+      0.4,
+      0.7
+    );
+    composer.addPass(bloomPass);
+    
+    const luminosityPass = new THREE.ShaderPass(THREE.LuminosityHighPassShader);
+    luminosityPass.material.uniforms['luminosityThreshold'].value = 0.05;
+    luminosityPass.material.uniforms['smoothWidth'].value = 0.1;
+    composer.addPass(luminosityPass);
+    // 音乐管理器
+// 音乐管理器 - 单音乐版本
+const musicManager = {
+  audioElement: null,
+  isPlaying: false,
+  volume: 0.5,
+  
+  // 只有一首音乐
+  musicUrls: [
+    '/Users/andy/Music/网易云音乐/唤醒大脑 - 阿尔法脑波音乐.mp3'  // 替换为你的音乐文件名
+  ],
+  currentTrack: 0,
+  
+  init() {
+    this.audioElement = new Audio();
+    this.audioElement.volume = this.volume;
+    this.audioElement.loop = true;  // 单曲循环
+    this.audioElement.src = this.musicUrls[0];
+    
+    // 预加载
+    this.audioElement.load();
+    
+    // 监听加载错误
+    this.audioElement.addEventListener('error', (e) => {
+      console.error('音乐加载失败:', e);
+      const button = document.getElementById('musicToggle');
+      button.innerHTML = '<span class="mr-2">❌</span> 加载失败';
+      button.classList.add('bg-red-600');
+      button.title = '音乐文件加载失败，请检查文件路径';
+    });
+    
+    // 监听加载成功
+    this.audioElement.addEventListener('canplaythrough', () => {
+      console.log('音乐加载成功，可以播放');
+    });
+  },
+  
+  toggleMusic() {
+    if (this.isPlaying) {
+      this.stopMusic();
+    } else {
+      this.startMusic();
+    }
+  },
+  
+  startMusic() {
+    if (!this.audioElement) {
+      this.init();
+    }
+    
+    this.audioElement.play().then(() => {
+      this.isPlaying = true;
+      updateMusicButton();
+      console.log('音乐开始播放');
+    }).catch(error => {
+      console.warn('音乐播放失败:', error);
+      // 显示友好的提示
+      const button = document.getElementById('musicToggle');
+      button.innerHTML = '<span class="mr-2">⏸️</span> 点击播放';
+      button.title = '点击开始播放音乐';
+    });
+  },
+  
+  stopMusic() {
+    if (this.audioElement) {
+      this.audioElement.pause();
+      this.audioElement.currentTime = 0;
+    }
+    this.isPlaying = false;
+    updateMusicButton();
+    console.log('音乐停止');
+  },
+  
+  setVolume(volume) {
+    this.volume = volume;
+    if (this.audioElement) {
+      this.audioElement.volume = volume;
+    }
+    document.getElementById('volumeValue').textContent = `${Math.round(volume * 100)}%`;
+    console.log('音量设置为:', volume);
+  },
+  
+  nextTrack() {
+    // 单音乐版本不需要切换
+    console.log('只有一首音乐，不切换');
+  }
+};
+
+    // 动画控制
+    let isRunning = false;
+    let animationId;
+    let speed = 1.0;
+    let lastTime = 0;
+    let fps = 60;
+
+    const speedSlider = document.getElementById('speedSlider');
+    speedSlider.addEventListener('input', (e) => {
+      speed = parseFloat(e.target.value);
+      document.getElementById('speedValue').textContent = `${speed.toFixed(1)}x`;
+    });
+    // 速度控制事件（原有的）
+
+// === 在这里添加音乐控制事件 ===
+// 音乐控制
+document.getElementById('musicToggle').addEventListener('click', () => {
+  musicManager.toggleMusic();
+  updateMusicButton();
+});
+
+document.getElementById('volumeSlider').addEventListener('input', (e) => {
+  const volume = parseFloat(e.target.value);
+  musicManager.setVolume(volume);
+  document.getElementById('volumeValue').textContent = `${Math.round(volume * 100)}%`;
+});
+
+// 更新音乐按钮状态
+function updateMusicButton() {
+  const button = document.getElementById('musicToggle');
+  if (musicManager.isPlaying) {
+    button.innerHTML = '<span class="mr-2">🔊</span> 音乐';
+    button.classList.remove('bg-purple-600');
+    button.classList.add('bg-green-600');
+  } else {
+    button.innerHTML = '<span class="mr-2">🔇</span> 音乐';
+    button.classList.remove('bg-green-600');
+    button.classList.add('bg-purple-600');
+  }
+}
+// === 音乐控制事件结束 ===
+// === UI隐藏/显示功能 ===
+document.getElementById('hideUI').addEventListener('click', function() {
+    document.body.classList.add('ui-hidden');
+    this.innerHTML = '显示UI';
+});
+
+document.getElementById('showUI').addEventListener('click', function() {
+    document.body.classList.remove('ui-hidden');
+    this.style.display = 'none';
+    document.getElementById('hideUI').innerHTML = '隐藏UI';
+});
+
+// === 鼠标移动显示UI按钮 ===
+let hideTimer = null;
+
+document.addEventListener('mousemove', () => {
+    const showUI = document.getElementById('showUI');
+    
+    // 只有在UI隐藏时才处理
+    if (document.body.classList.contains('ui-hidden')) {
+        // 立即显示（无过渡）
+        showUI.style.display = 'block';
+        showUI.classList.add('visible');
+        
+        // 清除之前的定时器
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+        }
+        
+        // 1秒后开始淡出
+        hideTimer = setTimeout(() => {
+            showUI.classList.remove('visible');
+            // 淡出完成后隐藏
+            setTimeout(() => {
+                showUI.style.display = 'none';
+            }, 1000);
+        }, 1000);
+    }
+});
+// === UI功能结束 ===
+// 星系类型选择（如果还有的话）...
+
+    const densitySlider = document.getElementById('densitySlider');
+    densitySlider.addEventListener('input', (e) => {
+      universeParams.densityMultiplier = parseFloat(e.target.value);
+      document.getElementById('densityValue').textContent = `${universeParams.densityMultiplier.toFixed(1)}x`;
+    });
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+      if (!isRunning) {
+        isRunning = true;
+        animate();
+      }
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      isRunning = false;
+      cancelAnimationFrame(animationId);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      galaxyManager.clearAllGalaxies();
+      galaxyManager.init();
+      freeMoveController.resetCamera();
+    });
+
+ 
+
+    // 主动画循环
+    function animate() {
+  if (!isRunning) return;
+  
+  animationId = requestAnimationFrame(animate);
+  
+  // 计算FPS
+  const now = performance.now();
+  if (lastTime) {
+    fps = Math.round(1000 / (now - lastTime));
+    document.getElementById('fpsCounter').textContent = `FPS: ${fps}`;
+  }
+  lastTime = now;
+  
+  // 更新自由移动
+  freeMoveController.update();
+  
+  // 每5帧更新一次星系可见性（提升性能）
+  if (frameCount % 5 === 0) {
+    galaxyManager.updateVisibleGalaxies();
+  }
+  
+  frameCount++;
+  galaxySelectionSystem.update();
+  
+  composer.render();
+}
+
+let frameCount = 0; // 添加帧计数器
+
+    // 响应窗口resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+composer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 初始化
+function init() {
+  // 模拟加载过程
+  let progress = 0;
+  const loadingInterval = setInterval(() => {
+    progress += Math.random() * 10;
+    if (progress >= 100) {
+      progress = 100;
+      clearInterval(loadingInterval);
+      
+      // 隐藏加载屏幕，显示主内容
+      document.getElementById('loadingScreen').style.opacity = '0';
+      setTimeout(() => {
+        document.getElementById('loadingScreen').style.display = 'none';
+        document.getElementById('mainContent').classList.remove('hidden');
+        
+        // 开始动画
+        animate();
+      }, 1000);
+    }
+    document.getElementById('loadingProgress').style.width = `${progress}%`;
+  }, 100);
+  
+  // 初始化系统
+  
+  freeMoveController.init();
+   galaxySelectionSystem.init();
+  createBackgroundStars();
+  
+  galaxyManager.init();
+  
+  
+  // 设置初始相机位置和朝向
+  camera.position.set(390, 500, 0);
+  camera.lookAt(camera.position.clone().add(freeMoveController.cameraDirection));
+  
+  // 初始化速度显示
+  freeMoveController.updateSpeedDisplay();
+  
+  // === 在这里添加音乐自动播放 ===
+  // 初始化音乐（用户交互后自动播放）
+  document.addEventListener('click', function initMusic() {
+    musicManager.startMusic();
+    updateMusicButton();
+    document.removeEventListener('click', initMusic);
+  }, { once: true });
+  // === 音乐初始化结束 ===
+  
+  // 初始渲染
+  composer.render();
+}
+
+// 开始初始化
+init();
+  </script>
+</body>
+</html>
