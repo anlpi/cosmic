@@ -180,16 +180,16 @@
     <!-- 星系信息面板 -->
 <div id="galaxyInfoPanel" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-800 bg-opacity-95 p-6 rounded-lg shadow-2xl max-w-md w-full hidden z-50">
   <div class="flex justify-between items-start mb-4">
-    <h3 class="text-xl font-bold text-white">星系信息</h3>
+    <h3 class="text-xl font-bold text-white">galaxy information</h3>
     <button id="closeInfoPanel" class="text-gray-400 hover:text-white text-2xl">&times;</button>
   </div>
   
   <div class="space-y-4">
     <div id="galaxyBasicInfo" class="text-sm text-gray-300">
-      <div>名称: <span id="galaxyName">-</span></div>
-      <div>类型: <span id="galaxyType">-</span></div>
-      <div>半径: <span id="galaxyRadius">-</span> 光年</div>
-      <div>距离: <span id="galaxyDistance">-</span> 光年</div>
+      <div>Name: <span id="galaxyName">-</span></div>
+      <div>Type: <span id="galaxyType">-</span></div>
+      <div>Radius: <span id="galaxyRadius">-</span> ly</div>
+      <div>Distance: <span id="galaxyDistance">-</span> ly</div>
     </div>
     
     <div id="galaxyDescription" class="text-gray-200 text-sm leading-relaxed border-t border-gray-700 pt-3">
@@ -197,16 +197,16 @@
     </div>
     
     <div id="ownershipInfo" class="border-t border-gray-700 pt-3 hidden">
-      <div class="text-green-400 text-sm mb-2">✅ 已拥有</div>
-      <div class="text-xs text-gray-400">所有者: <span id="ownerName">-</span></div>
+      <div class="text-green-400 text-sm mb-2">Owned</div>
+      <div class="text-xs text-gray-400">Owner: <span id="ownerName">-</span></div>
     </div>
     
     <div class="flex gap-2 pt-3">
       <button id="purchaseGalaxy" class="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-2 px-4 rounded transition-all">
-        🪐 购买星系
+        Purchase
       </button>
       <button id="deselectGalaxy" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors">
-        ✖ 取消选择
+        Cancel
       </button>
     </div>
   </div>
@@ -219,7 +219,7 @@
 
 <!-- 购买成功提示 -->
 <div id="purchaseToast" class="fixed top-4 right-4 bg-green-600 text-white p-4 rounded-lg shadow-lg hidden z-50">
-  🎉 购买成功！这个星系现在属于您了！
+   Purchase successfully
 </div>
 
 <style>
@@ -244,12 +244,12 @@
 </style>
     <!-- 统计面板 -->
     <div class="stats-panel hidden md:block">
-      <h3 class="text-sm font-bold mb-2 text-purple-300">宇宙统计</h3>
+      <h3 class="text-sm font-bold mb-2 text-purple-300">cosmic statistics</h3>
       <div class="space-y-1 text-xs">
-        <div>可见星系: <span id="visibleGalaxies">2</span></div>
-        <div>渲染距离: <span id="renderDistance">3000</span> 单位</div>
-        <div>相机位置: <span id="cameraPos">X:0, Y:0, Z:0</span></div>
-        <div>相机方向: <span id="cameraDir">X:0, Y:0, Z:-1</span></div>
+        <div>Visible Galaxies: <span id="visibleGalaxies">2</span></div>
+        <div>Render Distance: <span id="renderDistance">3000</span> </div>
+        <div>Camera Position: <span id="cameraPos">X:0, Y:0, Z:0</span></div>
+        <div>Camera Direction: <span id="cameraDir">X:0, Y:0, Z:-1</span></div>
       </div>
     </div>
   </div>
@@ -708,10 +708,10 @@ const galaxySelectionSystem = {
   // 获取星系类型名称
   getGalaxyTypeName(type) {
     const typeNames = {
-      'spiral': '旋涡星系',
-      'elliptical': '椭圆星系', 
-      'irregular': '不规则星系',
-      'collision': '碰撞星系'
+      'spiral': 'spiral galaxy',
+      'elliptical': 'elliptical galaxy', 
+      'irregular': 'irregular galaxy',
+      'collision': 'colliding galaxy'
     };
     return typeNames[type] || type;
   },
@@ -2003,11 +2003,11 @@ document.getElementById('volumeSlider').addEventListener('input', (e) => {
 function updateMusicButton() {
   const button = document.getElementById('musicToggle');
   if (musicManager.isPlaying) {
-    button.innerHTML = '<span class="mr-2">🔊</span> 音乐';
+    button.innerHTML = '<span class="mr-2"></span> Music';
     button.classList.remove('bg-purple-600');
     button.classList.add('bg-green-600');
   } else {
-    button.innerHTML = '<span class="mr-2">🔇</span> 音乐';
+    button.innerHTML = '<span class="mr-2"></span> Music';
     button.classList.remove('bg-green-600');
     button.classList.add('bg-purple-600');
   }
