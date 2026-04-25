@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cosmic Moniter Symulation</title>
+  <title>星系模拟器 - 真实宇宙探索</title>
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/shaders/CopyShader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/shaders/LuminosityHighPassShader.js"></script>
@@ -108,13 +108,13 @@
 </head>
 <button id="showUI" style="display:none;">显示UI</button>
 <body class="bg-black text-white">
-  <!-- loading... -->
+  <!-- 加载屏幕 -->
   <div id="loadingScreen" class="loading-screen" style="background: #000;">
     <div class="text-center">
       <h1 class="text-4xl font-bold mb-4 flex items-center justify-center">
-        <span class="mr-3 star-pulse">🌌</span> Cosim Monitor Simulation
+        <span class="mr-3 star-pulse">🌌</span> 星系模拟器
       </h1>
-      <p class="text-lg text-purple-200 mb-6">Initializing cosmic...</p >
+      <p class="text-lg text-purple-200 mb-6">正在初始化宇宙环境...</p >
       <div class="loading-bar">
         <div id="loadingProgress" class="loading-progress"></div>
       </div>
@@ -126,36 +126,36 @@
     <div class="control-panel rounded-xl p-4 w-11/12 max-w-5x!">
       <div class="flex flex-wrap items-center justify-between mb-4">
         <h1 class="text-2xl font-bold flex items-center">
-          <span class="mr-2">🌌</span> Cosmic Moniter Simulation
+          <span class="mr-2">🌌</span> 星系模拟器
         </h1>
         <div class="flex items-center space-x-4">
           <span id="fpsCounter" class="text-sm bg-purple-900 px-2 py-1 rounded">FPS: 60</span>
-          <span id="galaxyCount" class="text-sm bg-blue-900 px-2 py-1 rounded">galaxy: 2</span>
+          <span id="galaxyCount" class="text-sm bg-blue-900 px-2 py-1 rounded">星系: 2</span>
         </div>
       </div>
       <button id="hideUI" class="text-sm bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">隐藏UI</button>
       <div class="flex flex-wrap items-center gap-4 mb-3">
         <div class="flex space-x-2">
           <button id="startBtn" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg transition-all flex items-center">
-            <span class="mr-2">▶️</span> start
+            <span class="mr-2">▶️</span> 开始
           </button>
           <button id="pauseBtn" class="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-lg transition-all flex items-center">
-            <span class="mr-2">⏸️</span> stop
+            <span class="mr-2">⏸️</span> 暂停
           </button>
           <button id="resetBtn" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg transition-all flex items-center">
-            <span class="mr-2">🔄</span> restart
+            <span class="mr-2">🔄</span> 重置
           </button>
         </div>
         
         <div class="flex items-center">
-          <label for="speedSlider" class="mr-2 text-sm">velocity:</label>
+          <label for="speedSlider" class="mr-2 text-sm">速度:</label>
           <input type="range" id="speedSlider" min="0.1" max="2" step="0.1" value="1" 
                  class="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
           <span id="speedValue" class="ml-2 text-sm w-10">1.0x</span>
         </div>
         
         <div class="flex items-center">
-          <label for="densitySlider" class="mr-2 text-sm">density:</label>
+          <label for="densitySlider" class="mr-2 text-sm">密度:</label>
           <input type="range" id="densitySlider" min="0.1" max="2" step="0.1" value="1" 
                  class="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
           <span id="densityValue" class="ml-2 text-sm w-10">1.0x</span>
@@ -163,13 +163,26 @@
       </div>
       <div class="flex items-center">
   <button id="musicToggle" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded-lg transition-all flex items-center mr-2">
-    <span class="mr-2">🎵</span> music
+    <span class="mr-2">🎵</span> 音乐
   </button>
-  <label for="volumeSlider" class="mr-2 text-sm">volumn:</label>
+  <label for="volumeSlider" class="mr-2 text-sm">音量:</label>
   <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.5" 
          class="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
   <span id="volumeValue" class="ml-2 text-sm w-8">50%</span>
-
+</div>
+      
+      
+      
+      <div class="text-xs text-gray-300">
+        <strong>控制说明:</strong> 
+        左键拖动=旋转视角 | 
+        滚轮=缩放距离 | 
+        WASD=基于视角移动 | 
+        QE=基于视角升降 |
+        R=重置视角 |
+        ⬆️⬇️↔️= 旋转视角 
+      </div>
+    </div>
     
     <div id="container" class="w-full h-full rounded-lg overflow-hidden"></div>
     <!-- 星系信息面板 -->
@@ -703,10 +716,10 @@ const galaxySelectionSystem = {
   // 获取星系类型名称
   getGalaxyTypeName(type) {
     const typeNames = {
-      'spiral': 'spiral galaxy',
-      'elliptical': 'elliptical galaxy', 
-      'irregular': 'irregular galaxy',
-      'collision': 'colliding galaxy'
+      'spiral': '旋涡星系',
+      'elliptical': '椭圆星系', 
+      'irregular': '不规则星系',
+      'collision': '碰撞星系'
     };
     return typeNames[type] || type;
   },
@@ -717,25 +730,25 @@ const galaxySelectionSystem = {
       setTimeout(() => {
         const descriptions = {
           spiral: [
-  `This beautiful spiral galaxy has ${galaxy.params.arms} distinct spiral arms, slowly rotating in the universe. The central region is home to old yellow stars, while the spiral arms are filled with young blue stars.`,
-  `This spiral galaxy has a diameter of approximately ${Math.round(galaxy.params.radius * 2)} light-years, making it one of the most common types of galaxies in the universe.`,
-  `Observations show that this spiral galaxy is in an active star-forming period. Nebula regions on the spiral arms mark the birth of new stars.`
-]
+            `这个美丽的旋涡星系拥有${galaxy.params.arms}条清晰的旋臂，在宇宙中缓慢旋转。核心区域聚集着年老的黄色恒星，旋臂中分布着年轻的蓝色恒星。`,
+            `该旋涡星系直径约${Math.round(galaxy.params.radius * 2)}光年，是宇宙中最常见的星系类型之一。`,
+            `观测显示这个旋涡星系正处于活跃的恒星形成期，旋臂上的星云区域标志着新的恒星正在诞生。`
+          ],
           elliptical: [
-  `This elliptical galaxy has a perfect elliptical shape and is mainly composed of old, red stars. Lacking gas and dust, new star formation activity is limited.`,
-  `Elliptical galaxies are often the "elderly" galaxies of the universe, where most of the stars have existed for billions of years.`,
-  `The stars in this elliptical galaxy are distributed very evenly, with density gradually decreasing from the core to the edge.`
-],
+            `这个椭圆星系呈现出完美的椭圆形状，主要由年老的红色恒星组成。缺乏气体和尘埃，新的恒星形成活动有限。`,
+            `椭圆星系通常是宇宙中的"老年"星系，其中的恒星大多已经存在了数十亿年。`,
+            `该椭圆星系的恒星分布非常均匀，从核心到边缘密度逐渐降低。`
+          ],
           irregular: [
-  `This irregular galaxy has no obvious structural features and possesses a chaotic and unique shape. Rich in gas and dust, it is undergoing active star formation.`,
-  `Irregular galaxies may have lost their original structure due to gravitational interactions. Young blue star clusters are particularly striking.`,
-  `This irregular galaxy is relatively small in size but has a high star formation rate.`
-],
+            `这个不规则星系没有明显的结构特征，形状混沌而独特。富含气体和尘埃，正在进行活跃的恒星形成。`,
+            `不规则星系可能是由于引力相互作用而失去了原有的结构。年轻蓝色恒星群格外醒目。`,
+            `该不规则星系的大小相对较小，但恒星形成率却很高。`
+          ],
           collision: [
-  `This is a pair of colliding galaxies, whose gravitational interactions have created spectacular tidal tails and streams of stars.`,
-  `Galaxy collisions are among the most spectacular events in the universe. Collisions of gas clouds trigger intense star formation.`,
-  `This pair of colliding galaxies will likely eventually merge into a larger elliptical galaxy.`
-],
+            `这是一对正在发生碰撞的星系，引力相互作用产生了壮观的潮汐尾和恒星流。`,
+            `星系碰撞是宇宙中最壮观的事件之一。气体云的碰撞会触发剧烈的恒星形成。`,
+            `这对碰撞星系最终可能会合并成一个更大的椭圆星系。`
+          ]
         };
         
         const typeDescriptions = descriptions[galaxy.type] || descriptions.spiral;
@@ -2092,7 +2105,7 @@ document.addEventListener('mousemove', () => {
   
   // 更新自由移动
   freeMoveController.update();
-   galaxyManager.updateRotations(speed);
+  
   // 每5帧更新一次星系可见性（提升性能）
   if (frameCount % 5 === 0) {
     galaxyManager.updateVisibleGalaxies();
