@@ -2016,13 +2016,13 @@ function updateMusicButton() {
 // === UI隐藏/显示功能 ===
 document.getElementById('hideUI').addEventListener('click', function() {
     document.body.classList.add('ui-hidden');
-    this.innerHTML = '显示UI';
+    this.innerHTML = 'show UI';
 });
 
 document.getElementById('showUI').addEventListener('click', function() {
     document.body.classList.remove('ui-hidden');
     this.style.display = 'none';
-    document.getElementById('hideUI').innerHTML = '隐藏UI';
+    document.getElementById('hideUI').innerHTML = 'hide UI';
 });
 
 // === 鼠标移动显示UI按钮 ===
@@ -2061,33 +2061,30 @@ document.addEventListener('mousemove', () => {
       document.getElementById('densityValue').textContent = `${universeParams.densityMultiplier.toFixed(1)}x`;
     });
 
-    document.getElementById('startBtn').addEventListener('click', () => {
-      if (!isRunning) {
-        isRunning = true;
-        animate();
-      }
-    });
+    // 修复按钮逻辑
+document.getElementById('startBtn').addEventListener('click', () => {
+  isRunning = true;
+});
 
-    document.getElementById('pauseBtn').addEventListener('click', () => {
-      isRunning = false;
-      cancelAnimationFrame(animationId);
-    });
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  isRunning = false;
+});
 
-    document.getElementById('resetBtn').addEventListener('click', () => {
-      galaxyManager.clearAllGalaxies();
-      galaxyManager.init();
-      freeMoveController.resetCamera();
-    });
+document.getElementById('resetBtn').addEventListener('click', () => {
+  isRunning = false;
+  galaxyManager.clearAllGalaxies();
+  galaxyManager.init();
+  freeMoveController.resetCamera();
+});
 
  
 
-    // 主动画循环
-    function animate() {
-  if (!isRunning) return;
-  
+  // 修复后的 animate —— 强制开启动画 + 保证旋转执行
+function animate() {
+  // 永远执行渲染循环
   animationId = requestAnimationFrame(animate);
   
-  // 计算FPS
+  // 计算FPS（保留）
   const now = performance.now();
   if (lastTime) {
     fps = Math.round(1000 / (now - lastTime));
@@ -2095,17 +2092,19 @@ document.addEventListener('mousemove', () => {
   }
   lastTime = now;
   
-  // 更新自由移动
-  freeMoveController.update();
-  
-  // 每5帧更新一次星系可见性（提升性能）
-  if (frameCount % 5 === 0) {
-    galaxyManager.updateVisibleGalaxies();
+  // 只有运行时才更新星系
+  if (isRunning) {
+    freeMoveController.update();
+    galaxyManager.updateRotations(speed);
+    
+    if (frameCount % 5 === 0) {
+      galaxyManager.updateVisibleGalaxies();
+    }
+    
+    frameCount++;
+    galaxySelectionSystem.update();
   }
-  
-  frameCount++;
-  galaxySelectionSystem.update();
-  
+
   composer.render();
 }
 
